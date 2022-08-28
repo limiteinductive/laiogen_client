@@ -56,22 +56,22 @@ def run_ldm(credentials: Credentials, plasma: StableDiffusionPlasma, job: Job, d
 def check_weights_path() -> Path:
     weights_path = Path.home() / ".cache/stable-diffusion/"
     weights_path.mkdir(exist_ok=True)
-    if not (weights_path / "stable-diffusion.pt").exists():
+    if not (weights_path / "stable-diffusion.pt").is_dir():
         logger.info(f"Downloading stable-diffusion weights to {weights_path}")
         subprocess.run(
             [
                 "wget",
                 "-P",
-                f"{Path.home() / '.cache/stable-diffusion/'}",
+                str(weights_path),
                 "https://storage.googleapis.com/laion_limiteinducive/stable-diffusion.pt",
             ]
         )
 
-    return weights_path
+    return weights_path / "stable-diffusion.pt"
 
 
 @app.command()
-def main(user_id: str, user_pwd: str):
+def main(user_id: str = typer.Option(..., prompt=True), user_pwd: str = typer.Option(..., prompt=True, hide_input=True )):
     logger.add("laiogen_client.log", rotation="20 MB")
 
     logger.info("Checking credentials.")
