@@ -26,5 +26,5 @@ class Job(BaseModel):
     height: int
     steps: int
     skip_steps: float
-    images: List[str]
+    images: Optional[List[str]] = []
     init_image: Optional[str]

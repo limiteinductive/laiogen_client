@@ -4,8 +4,10 @@ from sdc.pipeline import run_stable_diffusion, initialize_plasma, StableDiffusio
 from pathlib import Path
 from loguru import logger
 from googletrans import Translator
+import multiprocessing as mp
 import GPUtil
 import threading
+import ray
 import time
 from pydantic import BaseModel
 from laiogen_client.database import (
@@ -26,6 +28,7 @@ warnings.filterwarnings("ignore")
 app = typer.Typer()
 
 
+@ray.remote(num_gpus=1)
 def run_ldm(credentials: Credentials, plasma: StableDiffusionPlasma, job: Job, device="cuda"):
     try:
         translator = Translator()
@@ -36,7 +39,7 @@ def run_ldm(credentials: Credentials, plasma: StableDiffusionPlasma, job: Job, d
     output = run_stable_diffusion(
         plasma=plasma,
         prompt=job.translated_prompt if job.translated_prompt else job.prompt,
-        steps=job.teps,
+        steps=job.steps,
         skip_steps=job.skip_steps,
         init_image=job.init_image,
         width=job.width,
@@ -44,19 +47,20 @@ def run_ldm(credentials: Credentials, plasma: StableDiffusionPlasma, job: Job, d
         batch_size=job.batch_size,
         guidance_scale=job.guidance_scale,
         device=device,
+        verbose=False,
     )
 
     job.completion_time = time.time()
     job.status = "completed"
 
     job = upload_images(credentials, job, output)
-    job = update_job(job)
+    job = update_job(credentials, job)
 
 
 def check_weights_path() -> Path:
     weights_path = Path.home() / ".cache/stable-diffusion/"
     weights_path.mkdir(exist_ok=True)
-    if not (weights_path / "stable-diffusion.pt").is_dir():
+    if not (weights_path / "stable-diffusion.pt").is_file():
         logger.info(f"Downloading stable-diffusion weights to {weights_path}")
         subprocess.run(
             [
@@ -72,6 +76,8 @@ def check_weights_path() -> Path:
 
 @app.command()
 def main(user_id: str = typer.Option(..., prompt=True), user_pwd: str = typer.Option(..., prompt=True, hide_input=True )):
+    ray.init()
+
     logger.add("laiogen_client.log", rotation="20 MB")
 
     logger.info("Checking credentials.")
@@ -90,7 +96,7 @@ def main(user_id: str = typer.Option(..., prompt=True), user_pwd: str = typer.Op
     logger.info("Ready to work.")
 
     while True:
-        if GPUtil.getAvailable(order="first", limit=1, maxLoad=0.5, maxMemory=1.0):
+        if GPUtil.getAvailable(order="first", limit=100, maxLoad=0.5, maxMemory=1.0):
             job: Job = accept_next_job(credentials)
 
             if job:
@@ -99,15 +105,16 @@ def main(user_id: str = typer.Option(..., prompt=True), user_pwd: str = typer.Op
                 job.status = "running"
                 job = update_job(credentials, job)
 
-                th = threading.Thread(
-                    run_ldm,
-                    args=(credentials, plasma, job),
-                )
-                th.run()
-            else:
-                logger.info("No job available, waiting 5 sec...")
+                future = run_ldm.remote(credentials, plasma, job)
 
-            time.sleep(5)
+                th = threading.Thread(
+                    target=lambda x: ray.get(future),
+                )
+
+            else:
+                logger.info("No job available, waiting 2 sec...")
+
+            time.sleep(2)
         else:
-            logger.info("---> Currently, no GPU available, waiting 20 sec...")
-            time.sleep(20)
+            logger.info("---> Currently, no GPU available, waiting 5 sec...")
+            time.sleep(5)

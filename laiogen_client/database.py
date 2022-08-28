@@ -1,6 +1,7 @@
 import time
 from typing import List
 import GPUtil
+import nanoid
 from sdc.pipeline import StableDiffusionOutput
 
 from laiogen_client.typing import Credentials, Job
@@ -29,8 +30,9 @@ def register_gpus(credentials: Credentials) -> List[dict]:
 def accept_next_job(credentials: Credentials) -> Job:
 
     time.sleep(1)
+    job_id = nanoid.generate()
 
-    return Job("cute cat", 1, 7.0, 512, 512, 50, 0, None)
+    return Job(id=job_id, prompt="cute cat", batch_size=1, guidance_scale=7.0, width=512, height=512, steps=50, skip_steps=0.)
 
 def upload_images(credentials: Credentials, job: Job, outputs: StableDiffusionOutput) -> Job:
     time.sleep(1)
@@ -39,7 +41,7 @@ def upload_images(credentials: Credentials, job: Job, outputs: StableDiffusionOu
 
 
 
-def update_job(job: Job) -> Job:
+def update_job(credentials: Credentials, job: Job) -> Job:
     time.sleep(1)
 
     return job
