@@ -1,5 +1,4 @@
 import time
-from pydantic import BaseModel
 from typing import List
 import GPUtil
 from sdc.pipeline import StableDiffusionOutput

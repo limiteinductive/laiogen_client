@@ -1,15 +1,11 @@
 import subprocess
-from typing import Optional
 import typer
-from rich.prompt import Prompt
 from sdc.pipeline import run_stable_diffusion, initialize_plasma, StableDiffusionPlasma
 from pathlib import Path
-from laiogen_client.laiogen_client.register import get_vm_gpus_info
 from loguru import logger
 from googletrans import Translator
 import GPUtil
 import threading
-import nanoid
 import time
 from pydantic import BaseModel
 from laiogen_client.database import (
